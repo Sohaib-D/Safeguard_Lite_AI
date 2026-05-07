@@ -1,0 +1,5 @@
+actual,BruteForce,DDoS,Normal,PortScan
+BruteForce,16,0,1,1
+DDoS,1,17,0,0
+Normal,2,0,16,0
+PortScan,1,1,5,11

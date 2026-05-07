@@ -1,0 +1,112 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+
+jobs:
+  lint-test-train:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONHASHSEED: "42"
+      CUDA_VISIBLE_DEVICES: ""
+      JAX_PLATFORM_NAME: cpu
+      MPLBACKEND: Agg
+      SAFEGUARD_DB_PATH: ${{ github.workspace }}/ci_safeguard.db
+      BACKEND_LOG_FILE: ${{ github.workspace }}/logs/ci_backend.log
+      MODEL_BUNDLE_PATH: ${{ github.workspace }}/models/trained_multiclass_smoke/best_model.pkl
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Verify CPU-only runtime
+        run: |
+          python - <<'PY'
+          import os
+          print("CUDA_VISIBLE_DEVICES =", os.environ.get("CUDA_VISIBLE_DEVICES"))
+          print("JAX_PLATFORM_NAME =", os.environ.get("JAX_PLATFORM_NAME"))
+          PY
+
+      - name: Run lint checks
+        run: |
+          python -m black --check backend frontend ml scripts tests
+          python -m flake8 --jobs=1 backend frontend ml scripts tests
+          python -m mypy --config-file mypy.ini backend frontend ml scripts tests
+          python -m bandit -r backend frontend ml -f txt
+
+      - name: Run tests
+        run: |
+          pytest tests -q
+
+      - name: Train deterministic CPU model
+        run: |
+          python scripts/train_intrusion_models.py \
+            --input data/processed/smoke_train.csv \
+            --target attack_class \
+            --model-output-dir models/ci_trained_run1 \
+            --preprocessing-artifacts-dir models/ci_preprocessing_run1 \
+            --selection-metric f1 \
+            --random-state 42 \
+            --missing-strategy impute \
+            --scaler standard \
+            --enable-jax-conversion
+
+      - name: Re-train for reproducibility check
+        run: |
+          python scripts/train_intrusion_models.py \
+            --input data/processed/smoke_train.csv \
+            --target attack_class \
+            --model-output-dir models/ci_trained_run2 \
+            --preprocessing-artifacts-dir models/ci_preprocessing_run2 \
+            --selection-metric f1 \
+            --random-state 42 \
+            --missing-strategy impute \
+            --scaler standard \
+            --enable-jax-conversion
+
+      - name: Compare reproducible outputs
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import pandas as pd
+
+          run1 = Path("models/ci_trained_run1/model_results.csv")
+          run2 = Path("models/ci_trained_run2/model_results.csv")
+          per_class1 = Path("models/ci_trained_run1/per_class_report.csv")
+          per_class2 = Path("models/ci_trained_run2/per_class_report.csv")
+
+          df1 = pd.read_csv(run1)
+          df2 = pd.read_csv(run2)
+          pc1 = pd.read_csv(per_class1)
+          pc2 = pd.read_csv(per_class2)
+
+          if not df1.equals(df2):
+              raise SystemExit("model_results.csv differs across deterministic runs.")
+          if not pc1.equals(pc2):
+              raise SystemExit("per_class_report.csv differs across deterministic runs.")
+
+          print("Reproducibility check passed.")
+          PY
+
+      - name: Upload trained artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: safeguard-ci-model-artifacts
+          path: |
+            models/ci_trained_run1
+            models/ci_preprocessing_run1

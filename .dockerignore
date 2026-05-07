@@ -1,0 +1,17 @@
+.git
+.github
+.mypy_cache
+.pytest_cache
+.streamlit/secrets.toml
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.log
+tests/
+models/cache/predictions/
+logs/
+venv/
+.venv/
+node_modules/
