@@ -1,0 +1,89 @@
+# Terminal Commands for PFAI
+
+## 1. Change to project directory
+
+Windows PowerShell:
+
+    cd "d:\4th Sem\Projects\PFAI"
+
+## 2. Create and activate virtual environment
+
+    python -m venv .venv
+    .\.venv\Scripts\Activate.ps1
+
+## 3. Install Python dependencies
+
+    pip install -r requirements.txt
+
+## 4. Start the backend locally
+
+    uvicorn backend.api.main:app --host 127.0.0.1 --port 8000 --reload
+
+## 5. Start the frontend locally
+
+    streamlit run frontend/app.py
+
+## 6. Open in browser
+
+    Frontend: http://localhost:8501
+    Backend health: http://localhost:8000/health
+
+## 7. Run tests
+
+    pytest
+
+## 8. Docker compose
+
+Build and start the full stack:
+
+    docker compose up --build
+
+Stop the stack:
+
+    docker compose down
+
+## 9. Backend Docker entrypoints
+
+Run only the backend service from the Dockerfile:
+
+    docker build --target backend -t safeguard-backend .
+    docker run --rm -p 8000:8000 safeguard-backend
+
+## 10. Frontend Docker entrypoints
+
+Run only the frontend service from the Dockerfile:
+
+    docker build --target frontend -t safeguard-frontend .
+    docker run --rm -p 8501:8501 safeguard-frontend
+
+## 11. Environment variables
+
+Backend environment variables (example):
+
+    API_HOST=0.0.0.0
+    API_PORT=8000
+    MODEL_BUNDLE_PATH=models/trained_multiclass_smoke/best_model.pkl
+    SAFEGUARD_DB_PATH=safeguard_ai.db
+    BACKEND_LOG_FILE=logs/backend.log
+    PREDICTION_CACHE_DIR=models/cache/predictions
+    JWT_SECRET_KEY=replace-with-a-long-random-secret
+    ALLOWED_ORIGINS=http://localhost:8501
+    USE_JAX_INFERENCE=true
+
+Frontend environment variable:
+
+    SAFEGUARD_API_BASE_URL=http://127.0.0.1:8000
+
+## 12. Sample admin creation / login
+
+Create admin:
+
+    curl -X POST http://127.0.0.1:8000/auth/create-admin \
+      -H "Content-Type: application/json" \
+      -d "{\"username\":\"admin_user\",\"password\":\"StrongPass123\"}"
+
+Login:
+
+    curl -X POST http://127.0.0.1:8000/auth/login \
+      -H "Content-Type: application/json" \
+      -d "{\"username\":\"admin_user\",\"password\":\"StrongPass123\"}"
