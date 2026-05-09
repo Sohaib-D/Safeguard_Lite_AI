@@ -8,7 +8,9 @@ _root = str(Path(__file__).resolve().parent.parent.parent)
 if _root not in sys.path:
     sys.path.insert(0, _root)
 
-from frontend.App import get_client, run_api_call, render_api_error, apply_custom_css, render_topbar
+from frontend.api_utils import get_client, run_api_call, fetch_model_info
+from frontend.ui_components import apply_custom_css, render_topbar, render_api_error
+
 from frontend.pages.Capture_Control import start_capture, stop_capture, get_capture_stats
 
 def render_live_monitor():

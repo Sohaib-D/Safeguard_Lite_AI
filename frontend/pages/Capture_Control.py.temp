@@ -1,0 +1,54 @@
+import sys
+import streamlit as st
+import requests
+import time
+import pandas as pd
+from pathlib import Path
+
+# Project root injection
+_root = str(Path(__file__).resolve().parent.parent.parent)
+if _root not in sys.path:
+    sys.path.insert(0, _root)
+
+from frontend.api_utils import get_client, run_api_call, fetch_model_info
+from frontend.ui_components import apply_custom_css, render_topbar, render_api_error
+
+# Constants
+API_BASE = "http://127.0.0.1:8000"
+
+def get_capture_stats():
+    """Fetch live capture statistics from backend"""
+    try:
+        response = requests.get(f"{API_BASE}/api/v1/capture/stats", timeout=10)
+        return response.json()
+    except Exception as e:
+        return {"error": str(e)}
+
+def start_capture(interface: str = None):
+    """Start packet capture on backend"""
+    try:
+        params = {"interface": interface} if interface else {}
+        response = requests.post(f"{API_BASE}/api/v1/capture/start", params=params, timeout=10)
+        return response.json()
+    except Exception as e:
+        return {"error": str(e)}
+
+def stop_capture():
+    """Stop packet capture"""
+    try:
+        response = requests.post(f"{API_BASE}/api/v1/capture/stop", timeout=10)
+        return response.json()
+    except Exception as e:
+        return {"error": str(e)}
+
+def main():
+    apply_custom_css()
+    render_topbar()
+    st.title("🛡️ Packet Capture Control")
+
+    st.markdown("""
+    Control real-time network packet capture and monitoring.
+    This feature requires administrative privileges and network access.
+    """)
+    
+    # Rest of the file content... (I'll use replace_file_content for the whole file if I can find the rest)
