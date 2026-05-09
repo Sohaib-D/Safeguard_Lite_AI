@@ -1,11 +1,16 @@
+import sys
 import streamlit as st
+from pathlib import Path
 
+_root = str(Path(__file__).resolve().parent.parent.parent)
+if _root not in sys.path:
+    sys.path.insert(0, _root)
 
-
-from frontend.app import apply_custom_css
+from frontend.App import apply_custom_css, render_topbar
 
 def render_beginner_guide():
     apply_custom_css()
+    render_topbar()
     st.title("🎓 Cybersecurity 101: The Beginner's Guide")
     st.markdown("""
     Welcome to your personal cybersecurity classroom! 

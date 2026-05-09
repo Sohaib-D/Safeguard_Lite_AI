@@ -1,11 +1,19 @@
+import sys
 import streamlit as st
 import pandas as pd
 import time
-from frontend.app import get_client, run_api_call, render_api_error, apply_custom_css
+from pathlib import Path
+
+_root = str(Path(__file__).resolve().parent.parent.parent)
+if _root not in sys.path:
+    sys.path.insert(0, _root)
+
+from frontend.App import get_client, run_api_call, render_api_error, apply_custom_css, render_topbar
 from frontend.pages.Capture_Control import start_capture, stop_capture, get_capture_stats
 
 def render_live_monitor():
     apply_custom_css()
+    render_topbar()
     st.title("📡 Live Network Monitor")
     st.markdown("""
     This page shows you what is happening on your network **right now**. 

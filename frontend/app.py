@@ -23,7 +23,6 @@ from frontend.logging_config import configure_logger
 from frontend.sample_data import ATTACK_PROFILES, generate_live_records
 
 # Force reload of api_client to prevent Streamlit caching issues
-import sys
 if "frontend.api_client" in sys.modules:
     del sys.modules["frontend.api_client"]
 from frontend.api_client import APIClientError, SafeguardAPIClient
@@ -54,6 +53,9 @@ def init_state() -> None:
 
 
 def apply_custom_css() -> None:
+    # Inject logo — always visible in both collapsed and expanded sidebar
+    if os.path.exists("frontend/assets/logo.png"):
+        st.logo("frontend/assets/logo.png", size="medium")
     st.html(
         """
         <style>
@@ -491,93 +493,84 @@ def render_live_dashboard(
 
 
 def render_sidebar() -> None:
+    """Minimal sidebar — logo only. Auth lives in the top-right popover."""
     with st.sidebar:
-        st.title("Safeguard-AI Lite")
+        st.caption("Safeguard-AI Lite")
         st.caption("Analyst console for lightweight intrusion detection")
-
-        st.session_state["api_base_url"] = st.text_input(
-            "API Base URL", value=st.session_state["api_base_url"]
-        )
+        st.markdown("---")
         client = get_client()
         health, err = run_api_call(client.health)
         if err is None and health:
-            badge = "Healthy" if health["status"] == "ok" else "Degraded"
-            st.success(f"Backend: {badge}")
+            badge = "✅ Healthy" if health["status"] == "ok" else "⚠️ Degraded"
+            st.caption(f"Backend: {badge}")
         else:
-            st.warning("Backend unreachable")
+            st.caption("Backend: ❌ Unreachable")
 
-        st.markdown("---")
-        st.subheader("Authentication")
-        if st.session_state["auth_token"]:
-            st.success(f"Signed in as {st.session_state['auth_user']}")
-            if st.button("Sign Out", use_container_width=True):
-                st.session_state["auth_token"] = None
-                st.session_state["auth_user"] = None
-                st.session_state["model_info_cache"] = None
-                st.rerun()
-        else:
-            username = st.text_input("Username", key="login_username")
-            password = st.text_input("Password", type="password", key="login_password")
-            col1, col2 = st.columns(2)
-            if col1.button("Login", use_container_width=True):
-                logger.info(
-                    "Frontend login submitted.",
-                    extra={
-                        "event_type": "frontend_login_attempt",
-                        "username": username,
-                    },
-                )
-                result, login_err = run_api_call(
-                    client.login, username=username, password=password
-                )
-                if login_err is None and result:
-                    st.session_state["auth_token"] = result["access_token"]
-                    st.session_state["auth_user"] = result["username"]
-                    st.success("Login successful.")
-                    logger.info(
-                        "Frontend login succeeded.",
-                        extra={
-                            "event_type": "frontend_login_success",
-                            "username": username,
-                        },
-                    )
+
+def render_topbar() -> None:
+    """Render a right-aligned Sign In / Admin popover in the Streamlit header area."""
+    # Build the label shown on the popover button
+    if st.session_state["auth_token"]:
+        btn_label = f"👤 {st.session_state['auth_user']}"
+    else:
+        btn_label = "🔐 Sign In"
+
+    # Place the popover in the far-right column of a header row
+    spacer, col_btn = st.columns([10, 1.2])
+    with col_btn:
+        with st.popover(btn_label, use_container_width=True):
+            st.markdown("#### ⚙️ Connection")
+            st.session_state["api_base_url"] = st.text_input(
+                "API Base URL",
+                value=st.session_state["api_base_url"],
+                label_visibility="collapsed",
+                placeholder="http://127.0.0.1:8000",
+            )
+
+            st.markdown("---")
+            if st.session_state["auth_token"]:
+                st.success(f"Signed in as **{st.session_state['auth_user']}**")
+                if st.button("Sign Out", use_container_width=True):
+                    st.session_state["auth_token"] = None
+                    st.session_state["auth_user"] = None
+                    st.session_state["model_info_cache"] = None
                     st.rerun()
-                elif login_err:
-                    render_api_error(login_err)
+            else:
+                st.markdown("#### 🔐 Authentication")
+                username = st.text_input("Username", key="login_username", placeholder="admin")
+                password = st.text_input("Password", type="password", key="login_password", placeholder="••••••••")
 
-            if col2.button("Create Admin", use_container_width=True):
-                st.session_state["show_create_admin"] = not st.session_state[
-                    "show_create_admin"
-                ]
-
-            if st.session_state["show_create_admin"]:
-                admin_user = st.text_input(
-                    "New Admin Username", key="admin_create_user"
-                )
-                admin_pass = st.text_input(
-                    "New Admin Password", type="password", key="admin_create_pass"
-                )
-                if st.button("Confirm Admin Creation", use_container_width=True):
-                    logger.info(
-                        "Frontend admin creation submitted.",
-                        extra={
-                            "event_type": "frontend_create_admin_attempt",
-                            "username": admin_user,
-                        },
+                client = get_client()
+                c1, c2 = st.columns(2)
+                if c1.button("Login", use_container_width=True, type="primary"):
+                    result, login_err = run_api_call(
+                        client.login, username=username, password=password
                     )
-                    result, create_err = run_api_call(
-                        client.create_admin, username=admin_user, password=admin_pass
-                    )
-                    if create_err is None and result:
-                        st.success(f"Admin {result['username']} created.")
-                        st.session_state["show_create_admin"] = False
-                    elif create_err:
-                        render_api_error(create_err)
+                    if login_err is None and result:
+                        st.session_state["auth_token"] = result["access_token"]
+                        st.session_state["auth_user"] = result["username"]
+                        st.rerun()
+                    elif login_err:
+                        render_api_error(login_err)
 
-        st.markdown("---")
-        st.caption(
-            "Protected tabs require a valid bearer token from the FastAPI backend."
-        )
+                if c2.button("Create Admin", use_container_width=True):
+                    st.session_state["show_create_admin"] = not st.session_state["show_create_admin"]
+
+                if st.session_state["show_create_admin"]:
+                    st.markdown("##### Create Admin Account")
+                    admin_user = st.text_input("New Username", key="admin_create_user")
+                    admin_pass = st.text_input("New Password", type="password", key="admin_create_pass")
+                    if st.button("Confirm Creation", use_container_width=True):
+                        result, create_err = run_api_call(
+                            client.create_admin, username=admin_user, password=admin_pass
+                        )
+                        if create_err is None and result:
+                            st.success(f"Admin **{result['username']}** created.")
+                            st.session_state["show_create_admin"] = False
+                        elif create_err:
+                            render_api_error(create_err)
+
+                st.caption("Protected tabs require a valid bearer token.")
 
 
 def render_home() -> None:
@@ -1310,6 +1303,7 @@ def main() -> None:
     init_state()
     apply_custom_css()
     render_sidebar()
+    render_topbar()
 
     tabs = st.tabs(
         [

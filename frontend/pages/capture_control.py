@@ -2,12 +2,19 @@
 Packet Capture Control Page for Streamlit
 """
 
+import sys
 import streamlit as st
 import requests
 import time
+from pathlib import Path
 from typing import Dict, Any
 
+_root = str(Path(__file__).resolve().parent.parent.parent)
+if _root not in sys.path:
+    sys.path.insert(0, _root)
+
 API_BASE = "http://localhost:8000"
+
 
 def get_capture_stats() -> Dict[str, Any]:
     """Get capture statistics from API"""
@@ -35,7 +42,11 @@ def stop_capture():
         return {"error": str(e)}
 
 def main():
+    from frontend.App import apply_custom_css, render_topbar
+    apply_custom_css()
+    render_topbar()
     st.title("🛡️ Packet Capture Control")
+
 
     st.markdown("""
     Control real-time network packet capture and monitoring.

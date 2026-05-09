@@ -1,11 +1,20 @@
+import sys
 import streamlit as st
 import pandas as pd
-from frontend.app import get_client, run_api_call, render_api_error, apply_custom_css
+from pathlib import Path
+
+# Guarantee the project root (PFAI/) is on sys.path on Windows
+_root = str(Path(__file__).resolve().parent.parent.parent)
+if _root not in sys.path:
+    sys.path.insert(0, _root)
+
+from frontend.App import get_client, run_api_call, render_api_error, apply_custom_css, render_topbar
 
 
 
 def render_active_scanner():
     apply_custom_css()
+    render_topbar()
     st.title("🎯 Active Target Scanner")
     st.markdown("""
     **Welcome to the Active Scanner!** 

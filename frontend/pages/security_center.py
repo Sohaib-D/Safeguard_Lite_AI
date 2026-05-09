@@ -1,11 +1,19 @@
+import sys
 import streamlit as st
 import pandas as pd
-from frontend.app import get_client, run_api_call, render_api_error, apply_custom_css
+from pathlib import Path
+
+_root = str(Path(__file__).resolve().parent.parent.parent)
+if _root not in sys.path:
+    sys.path.insert(0, _root)
+
+from frontend.App import get_client, run_api_call, render_api_error, apply_custom_css, render_topbar
 
 
 
 def render_security_center():
     apply_custom_css()
+    render_topbar()
     st.title("🛡️ Security Center & Automated Defense")
     st.markdown("""
     Welcome to the Security Center. When the AI detects a threat, you will see it here. 
