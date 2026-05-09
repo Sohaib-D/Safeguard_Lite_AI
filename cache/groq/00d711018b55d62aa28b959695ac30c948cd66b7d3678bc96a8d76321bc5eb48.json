@@ -1,0 +1,28 @@
+{
+  "cached_at": "2026-05-09T16:46:25.767311",
+  "analysis": {
+    "threat_summary": "No threat detected. The system is functioning normally.",
+    "risk_assessment": "Low risk. No action required.",
+    "remediation_recommendations": [
+      "Continue monitoring the system for any changes."
+    ],
+    "incident_timeline": [],
+    "false_positive_analysis": "This alert is likely a false positive due to the low confidence level.",
+    "correlated_events": [],
+    "shap_explanation": "No SHAP explanations available.",
+    "incident_report": "No incident report available.",
+    "raw_response": {
+      "threat_summary": "No threat detected. The system is functioning normally.",
+      "risk_assessment": "Low risk. No action required.",
+      "remediation_recommendations": [
+        "Continue monitoring the system for any changes."
+      ],
+      "incident_timeline": [],
+      "false_positive_analysis": "This alert is likely a false positive due to the low confidence level.",
+      "correlated_events": [],
+      "shap_explanation": "No SHAP explanations available.",
+      "incident_report": "No incident report available."
+    },
+    "generated_at": "2026-05-09T16:46:25.767311"
+  }
+}
