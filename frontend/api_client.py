@@ -119,3 +119,30 @@ class SafeguardAPIClient:
             timeout=120,
         )
         return self._handle_response(response)
+
+    def acknowledge_alert(self, alert_id: int, acknowledged_by: str, comment: str | None = None) -> dict[str, Any]:
+        response = requests.post(
+            f"{self.base_url}/api/v1/alerts/{alert_id}/acknowledge",
+            headers={**self._headers(), "Content-Type": "application/json"},
+            json={"acknowledged_by": acknowledged_by, "comment": comment},
+            timeout=20,
+        )
+        return self._handle_response(response)
+
+    def analyze_soc(self, payload: dict[str, Any]) -> dict[str, Any]:
+        response = requests.post(
+            f"{self.base_url}/api/v1/soc/analyze",
+            headers={**self._headers(), "Content-Type": "application/json"},
+            json=payload,
+            timeout=120,
+        )
+        return self._handle_response(response)
+
+    def active_scan(self, target: str) -> dict[str, Any]:
+        response = requests.post(
+            f"{self.base_url}/api/v1/scan",
+            headers={**self._headers(), "Content-Type": "application/json"},
+            json={"target": target},
+            timeout=120,
+        )
+        return self._handle_response(response)

@@ -1,38 +1,54 @@
 # Terminal Commands for PFAI
 
-## 1. Change to project directory
+## Terminal 1 — Backend
 
-Windows PowerShell:
+1. Open Terminal 1 and change to the project directory:
 
     cd "d:\4th Sem\Projects\PFAI"
 
-## 2. Create and activate virtual environment
+2. Create and activate the virtual environment:
 
     python -m venv .venv
     .\.venv\Scripts\Activate.ps1
 
-## 3. Install Python dependencies
+3. Install dependencies:
 
     pip install -r requirements.txt
 
-## 4. Start the backend locally
+4. Start the backend server:
 
     uvicorn backend.api.main:app --host 127.0.0.1 --port 8000 --reload
 
-## 5. Start the frontend locally
+
+## Terminal 2 — Frontend
+
+1. Open Terminal 2 and change to the project directory:
+
+    cd "d:\4th Sem\Projects\PFAI"
+
+2. Activate the same virtual environment:
+
+    .\.venv\Scripts\Activate.ps1
+
+3. Start the Streamlit frontend:
 
     streamlit run frontend/app.py
 
-## 6. Open in browser
 
-    Frontend: http://localhost:8501
-    Backend health: http://localhost:8000/health
+## Open in browser
 
-## 7. Run tests
+- Frontend: http://localhost:8501
+- Backend health: http://localhost:8000/health
+
+
+## Optional: Run tests
+
+In either terminal after activation:
 
     pytest
 
-## 8. Docker compose
+
+## Optional: Docker compose
 
 Build and start the full stack:
 
@@ -42,23 +58,10 @@ Stop the stack:
 
     docker compose down
 
-## 9. Backend Docker entrypoints
 
-Run only the backend service from the Dockerfile:
+## Environment variables
 
-    docker build --target backend -t safeguard-backend .
-    docker run --rm -p 8000:8000 safeguard-backend
-
-## 10. Frontend Docker entrypoints
-
-Run only the frontend service from the Dockerfile:
-
-    docker build --target frontend -t safeguard-frontend .
-    docker run --rm -p 8501:8501 safeguard-frontend
-
-## 11. Environment variables
-
-Backend environment variables (example):
+Backend example:
 
     API_HOST=0.0.0.0
     API_PORT=8000
@@ -70,11 +73,12 @@ Backend environment variables (example):
     ALLOWED_ORIGINS=http://localhost:8501
     USE_JAX_INFERENCE=true
 
-Frontend environment variable:
+Frontend example:
 
     SAFEGUARD_API_BASE_URL=http://127.0.0.1:8000
 
-## 12. Sample admin creation / login
+
+## Sample admin creation / login
 
 Create admin:
 

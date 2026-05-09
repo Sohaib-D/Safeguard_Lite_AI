@@ -3,6 +3,9 @@ from __future__ import annotations
 import os
 import secrets
 from dataclasses import dataclass, field
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 @dataclass
@@ -30,6 +33,23 @@ class Settings:
     prediction_cache_dir: str = os.environ.get(
         "PREDICTION_CACHE_DIR", "models/cache/predictions"
     )
+    rules_path: str = os.environ.get("RULES_PATH", "rules")
+    abuseipdb_api_key: str = os.environ.get("ABUSEIPDB_API_KEY", "")
+    virustotal_api_key: str = os.environ.get("VIRUSTOTAL_API_KEY", "")
+    greynoise_api_key: str = os.environ.get("GREYNOISE_API_KEY", "")
+    otx_api_key: str = os.environ.get("OTX_API_KEY", "")
+    threat_intel_cache_dir: str = os.environ.get("THREAT_INTEL_CACHE_DIR", "cache/intel")
+    threat_intel_cache_ttl: int = int(os.environ.get("THREAT_INTEL_CACHE_TTL", "900"))
+    rules_path: str = os.environ.get("RULES_PATH", "rules")
+    groq_api_url: str = os.environ.get("GROQ_API_URL", "https://api.groq.com/openai/v1/chat/completions")
+    groq_api_key: str = os.environ.get("GROQ_API_KEY", "")
+    groq_model: str = os.environ.get("GROQ_MODEL", "llama-3.1-8b-instant")
+    groq_rate_limit_per_minute: int = int(
+        os.environ.get("GROQ_RATE_LIMIT_PER_MINUTE", "15")
+    )
+    groq_max_retries: int = int(os.environ.get("GROQ_MAX_RETRIES", "3"))
+    groq_cache_dir: str = os.environ.get("GROQ_CACHE_DIR", "cache/groq")
+    groq_cache_ttl: int = int(os.environ.get("GROQ_CACHE_TTL", "900"))
     use_jax_inference: bool = (
         os.environ.get("USE_JAX_INFERENCE", "true").lower() == "true"
     )

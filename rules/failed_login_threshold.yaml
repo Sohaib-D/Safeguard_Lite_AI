@@ -1,0 +1,9 @@
+name: failed_login_threshold
+description: Detect excessive failed login attempts
+enabled: true
+severity: high
+score: 0.9
+conditions:
+  - field: failed_login_count
+    op: greater_than
+    value: 5

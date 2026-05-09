@@ -1,0 +1,9 @@
+name: suspicious_dns_request
+description: Suspicious DNS request pattern
+enabled: true
+severity: medium
+score: 0.8
+conditions:
+  - field: dns_query_count
+    op: greater_than
+    value: 25

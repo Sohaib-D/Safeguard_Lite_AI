@@ -43,6 +43,9 @@ services:
       - safeguard_data:/app/data
       - safeguard_logs:/app/logs
       - safeguard_cache:/app/models/cache/predictions
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
     healthcheck:
       test:
         [

@@ -77,6 +77,81 @@ class SQLiteStore:
                 )
                 """)
             conn.execute("""
+                CREATE TABLE IF NOT EXISTS detection_alerts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    alert_type TEXT NOT NULL,
+                    threat_type TEXT NOT NULL,
+                    severity TEXT NOT NULL,
+                    score REAL NOT NULL,
+                    confidence REAL NOT NULL,
+                    description TEXT NOT NULL,
+                    explanation_json TEXT,
+                    event_context_json TEXT,
+                    acknowledged INTEGER NOT NULL DEFAULT 0,
+                    acknowledged_by TEXT,
+                    acknowledged_at TEXT,
+                    ack_comment TEXT,
+                    created_at TEXT NOT NULL
+                )
+                """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS detection_rules (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    source_file TEXT,
+                    yaml_text TEXT NOT NULL,
+                    enabled INTEGER NOT NULL DEFAULT 1,
+                    created_at TEXT NOT NULL
+                )
+                """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS response_actions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    alert_id INTEGER NOT NULL,
+                    action_type TEXT NOT NULL,
+                    target TEXT NOT NULL,
+                    parameters_json TEXT,
+                    status TEXT NOT NULL,
+                    requested_by TEXT NOT NULL,
+                    approved_by TEXT,
+                    result_json TEXT,
+                    rollback_json TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    executed_at TEXT
+                )
+                """)
+            existing_columns = [row["name"] for row in conn.execute("PRAGMA table_info(detection_alerts)").fetchall()]
+            if "acknowledged" not in existing_columns:
+                conn.execute(
+                    "ALTER TABLE detection_alerts ADD COLUMN acknowledged INTEGER NOT NULL DEFAULT 0"
+                )
+            if "acknowledged_by" not in existing_columns:
+                conn.execute(
+                    "ALTER TABLE detection_alerts ADD COLUMN acknowledged_by TEXT"
+                )
+            if "acknowledged_at" not in existing_columns:
+                conn.execute(
+                    "ALTER TABLE detection_alerts ADD COLUMN acknowledged_at TEXT"
+                )
+            if "ack_comment" not in existing_columns:
+                conn.execute(
+                    "ALTER TABLE detection_alerts ADD COLUMN ack_comment TEXT"
+                )
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS action_audit (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    action_id INTEGER NOT NULL,
+                    event_type TEXT NOT NULL,
+                    actor TEXT NOT NULL,
+                    details_json TEXT,
+                    timestamp TEXT NOT NULL,
+                    FOREIGN KEY (action_id)
+                        REFERENCES response_actions(id)
+                        ON DELETE CASCADE
+                )
+                """)
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS activity_logs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     username TEXT,
@@ -229,6 +304,9 @@ class SQLiteStore:
                 "SELECT COUNT(*) FROM scan_results"
             ).fetchone()[0]
             total_alerts = conn.execute("SELECT COUNT(*) FROM alerts").fetchone()[0]
+            total_detection_alerts = conn.execute(
+                "SELECT COUNT(*) FROM detection_alerts"
+            ).fetchone()[0]
             total_uploads = conn.execute(
                 "SELECT COUNT(*) FROM activity_logs WHERE action='upload'"
             ).fetchone()[0]
@@ -261,6 +339,7 @@ class SQLiteStore:
         return {
             "total_predictions": int(total_predictions),
             "total_alerts": int(total_alerts),
+            "total_detection_alerts": int(total_detection_alerts),
             "total_uploads": int(total_uploads),
             "avg_confidence": round(float(avg_confidence), 4),
             "latest_prediction_at": (
@@ -277,6 +356,158 @@ class SQLiteStore:
             },
             "alerts_by_severity": {row["severity"]: row["count"] for row in alert_rows},
         }
+
+    def store_detection_alert(
+        self,
+        alert_type: str,
+        threat_type: str,
+        severity: str,
+        score: float,
+        confidence: float,
+        description: str,
+        explanation: dict[str, Any] | None = None,
+        event_context: dict[str, Any] | None = None,
+    ) -> int:
+        now = datetime.utcnow().isoformat()
+        explanation_json = json.dumps(explanation or {})
+        event_context_json = json.dumps(event_context or {})
+        with self.transaction() as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO detection_alerts
+                  (alert_type, threat_type, severity, score, confidence, description,
+                   explanation_json, event_context_json, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    alert_type,
+                    threat_type,
+                    severity,
+                    score,
+                    confidence,
+                    description,
+                    explanation_json,
+                    event_context_json,
+                    now,
+                ),
+            )
+            if cursor.lastrowid is None:
+                raise RuntimeError("Failed to store detection alert.")
+            return int(cursor.lastrowid)
+
+    def get_detection_alerts(self, limit: int = 50) -> list[dict[str, Any]]:
+        with self.transaction() as conn:
+            rows = conn.execute(
+                "SELECT id, alert_type, threat_type, severity, score, confidence, description, explanation_json, event_context_json, acknowledged, acknowledged_by, acknowledged_at, ack_comment, created_at FROM detection_alerts ORDER BY created_at DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        alerts: list[dict[str, Any]] = []
+        for row in rows:
+            alerts.append(
+                {
+                    "id": int(row["id"]),
+                    "alert_type": row["alert_type"],
+                    "threat_type": row["threat_type"],
+                    "severity": row["severity"],
+                    "score": float(row["score"]),
+                    "confidence": float(row["confidence"]),
+                    "description": row["description"],
+                    "explanation": json.loads(row["explanation_json"] or "{}"),
+                    "event_context": json.loads(row["event_context_json"] or "{}"),
+                    "acknowledged": bool(row["acknowledged"]),
+                    "acknowledged_by": row["acknowledged_by"],
+                    "acknowledged_at": datetime.fromisoformat(row["acknowledged_at"]) if row["acknowledged_at"] else None,
+                    "ack_comment": row["ack_comment"],
+                    "created_at": datetime.fromisoformat(row["created_at"]),
+                }
+            )
+        return alerts
+
+    def get_detection_alert(self, alert_id: int) -> dict[str, Any] | None:
+        with self.transaction() as conn:
+            row = conn.execute(
+                "SELECT id, alert_type, threat_type, severity, score, confidence, description, explanation_json, event_context_json, acknowledged, acknowledged_by, acknowledged_at, ack_comment, created_at FROM detection_alerts WHERE id = ?",
+                (alert_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return {
+            "id": int(row["id"]),
+            "alert_type": row["alert_type"],
+            "threat_type": row["threat_type"],
+            "severity": row["severity"],
+            "score": float(row["score"]),
+            "confidence": float(row["confidence"]),
+            "description": row["description"],
+            "explanation": json.loads(row["explanation_json"] or "{}"),
+            "event_context": json.loads(row["event_context_json"] or "{}"),
+            "acknowledged": bool(row["acknowledged"]),
+            "acknowledged_by": row["acknowledged_by"],
+            "acknowledged_at": datetime.fromisoformat(row["acknowledged_at"]) if row["acknowledged_at"] else None,
+            "ack_comment": row["ack_comment"],
+            "created_at": datetime.fromisoformat(row["created_at"]),
+        }
+
+    def acknowledge_detection_alert(
+        self,
+        alert_id: int,
+        acknowledged_by: str,
+        ack_comment: str | None = None,
+    ) -> None:
+        now = datetime.utcnow().isoformat()
+        with self.transaction() as conn:
+            conn.execute(
+                "UPDATE detection_alerts SET acknowledged = 1, acknowledged_by = ?, acknowledged_at = ?, ack_comment = ? WHERE id = ?",
+                (acknowledged_by, now, ack_comment, alert_id),
+            )
+
+    def get_response_action(self, action_id: int) -> dict[str, Any] | None:
+        with self.transaction() as conn:
+            row = conn.execute(
+                "SELECT * FROM response_actions WHERE id = ?",
+                (action_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return {
+            "id": int(row["id"]),
+            "alert_id": int(row["alert_id"]),
+            "action_type": row["action_type"],
+            "target": row["target"],
+            "parameters_json": row["parameters_json"],
+            "status": row["status"],
+            "requested_by": row["requested_by"],
+            "approved_by": row["approved_by"],
+            "result_json": row["result_json"],
+            "rollback_json": row["rollback_json"],
+            "created_at": datetime.fromisoformat(row["created_at"]),
+            "updated_at": datetime.fromisoformat(row["updated_at"]),
+            "executed_at": datetime.fromisoformat(row["executed_at"]) if row["executed_at"] else None,
+        }
+
+    def get_pending_response_actions(self, limit: int = 50) -> list[dict[str, Any]]:
+        with self.transaction() as conn:
+            rows = conn.execute(
+                "SELECT * FROM response_actions WHERE status = ? ORDER BY created_at ASC LIMIT ?",
+                ("pending", limit),
+            ).fetchall()
+        return [
+            {
+                "action_id": int(row["id"]),
+                "alert_id": int(row["alert_id"]),
+                "action_type": row["action_type"],
+                "target": row["target"],
+                "parameters": json.loads(row["parameters_json"] or "{}"),
+                "status": row["status"],
+                "requested_by": row["requested_by"],
+                "approved_by": row["approved_by"],
+                "result": json.loads(row["result_json"] or "{}"),
+                "rollback_available": bool(row["rollback_json"]),
+                "created_at": datetime.fromisoformat(row["created_at"]),
+                "updated_at": datetime.fromisoformat(row["updated_at"]),
+            }
+            for row in rows
+        ]
 
     def ping(self) -> bool:
         try:

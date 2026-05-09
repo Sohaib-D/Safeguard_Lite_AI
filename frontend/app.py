@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 import os
 import sys
 import time
@@ -10,6 +11,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 # Add project root to path so imports work when running with streamlit
 project_root = Path(__file__).parent.parent
@@ -468,17 +470,27 @@ def render_home() -> None:
     st.markdown(
         """
         <div class="hero-card">
-            <div class="section-label">Mission Control</div>
-            <h2 style="margin:0;">Fast triage for campus and SME intrusion signals</h2>
+            <div class="section-label">👋 Welcome to Safeguard-AI Lite!</div>
+            <h2 style="margin:0;">Your Personal AI Security Assistant</h2>
             <p style="margin-top:0.6rem;color:#cbd5e1;">
-                Upload captured traffic features, simulate live events,
-                inspect class distributions,
-                and review SHAP-driven feature importance from the same console.
+                Think of this software as a very smart security guard for your network. It watches the traffic (data) going in and out of your computer and looks for anything suspicious—like a hacker trying to break in or a virus trying to steal information.
             </p>
         </div>
         """,
         unsafe_allow_html=True,
     )
+    
+    with st.expander("📖 Getting Started Guide (Start Here!)", expanded=True):
+        st.markdown("""
+        **Don't know anything about cybersecurity? No problem!**
+        
+        Here is what you can do with this app:
+        1. **🎯 Active Scanner (Sidebar):** Type in an IP address or a website, and we will safely check it to see if it has any "open doors" (ports) that hackers could use.
+        2. **📡 Live Prediction (Sidebar):** Simulate what happens when a hacker tries to attack your network, and watch the AI catch it in real-time.
+        3. **📊 Statistics (Sidebar):** See a summary of all the attacks we've caught.
+        
+        *Whenever you see a 📖 icon, click it to learn what the information means in plain English!*
+        """)
 
     model_info = fetch_model_info()
     stats_result, _ = (
@@ -894,6 +906,273 @@ def render_explanations() -> None:
             st.dataframe(contributions, use_container_width=True, hide_index=True)
 
 
+def render_soc_dashboard() -> None:
+    st.subheader("SOC Operations Dashboard")
+    st.caption(
+        "Real-time alert stream, network event feed, analyst notifications, and acknowledgement workflow."
+    )
+
+    api_base_url = st.session_state["api_base_url"]
+    token = st.session_state.get("auth_token") or ""
+    if not token:
+        st.warning("Sign in to enable acknowledgement actions and receive secure analyst notifications.")
+
+    html = """
+    <div style="font-family: 'Segoe UI', sans-serif; color: #e2e8f0; background:#0f172a; padding:18px; border-radius:18px;">
+      <style>
+        .soc-box { background:#111827; border:1px solid rgba(59,130,246,0.24); border-radius:14px; padding:14px; margin-bottom:12px; }
+        .soc-title { font-size:1.3rem; color:#38bdf8; margin-bottom:6px; }
+        .soc-count { font-size:2.2rem; color:#f8fafc; margin:4px 0; }
+        .soc-label { color:#94a3b8; margin-bottom:8px; }
+        .soc-list { list-style:none; padding:0; margin:0; }
+        .soc-list li { border-bottom:1px solid rgba(148,163,184,0.12); padding:10px 0; }
+        .soc-button { background:#2563eb; color:#fff; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; }
+        .soc-button.disabled { background:#475569; cursor:not-allowed; }
+        .soc-notice { background: rgba(14, 165, 233, 0.08); border:1px solid rgba(14,165,233,0.24); padding:12px; border-radius:12px; margin-bottom:10px; }
+      </style>
+      <div class="soc-box">
+        <div class="soc-title">Connection</div>
+        <div class="soc-label">WebSocket channel:</div>
+        <div id="ws-status" class="soc-count">Connecting…</div>
+      </div>
+      <div class="soc-box" id="metrics-panel">
+        <div class="soc-title">Operational Metrics</div>
+        <div class="soc-label">Alerts, attack cadence, and event velocity updated live.</div>
+        <div style="display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:12px;">
+          <div style="background:#0f172a; border-radius:12px; padding:10px;"><div class="soc-label">Alerts</div><div id="metric-alerts" class="soc-count">0</div></div>
+          <div style="background:#0f172a; border-radius:12px; padding:10px;"><div class="soc-label">Detections</div><div id="metric-detections" class="soc-count">0</div></div>
+          <div style="background:#0f172a; border-radius:12px; padding:10px;"><div class="soc-label">Notifications</div><div id="metric-notifications" class="soc-count">0</div></div>
+          <div style="background:#0f172a; border-radius:12px; padding:10px;"><div class="soc-label">Logs</div><div id="metric-logs" class="soc-count">0</div></div>
+        </div>
+      </div>
+      <div class="soc-box" id="timeline-panel">
+        <div class="soc-title">Alert Timeline</div>
+        <ul id="timeline-list" class="soc-list"></ul>
+      </div>
+      <div class="soc-box" id="alert-panel">
+        <div class="soc-title">Live Alert Feed</div>
+        <ul id="alert-list" class="soc-list"></ul>
+      </div>
+      <div class="soc-box" id="notification-panel">
+        <div class="soc-title">Notification Center</div>
+        <ul id="notification-list" class="soc-list"></ul>
+      </div>
+      <div class="soc-box" id="log-panel">
+        <div class="soc-title">Streaming Logs</div>
+        <ul id="log-list" class="soc-list"></ul>
+      </div>
+      <audio id="alert-sound" src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YSoAAAAA"></audio>
+    </div>
+    <script>
+      const baseUrl = "{{API_BASE_URL}}";
+      const token = "{{TOKEN}}";
+      const wsUrl = baseUrl.replace(/^http/, "ws") + "/ws/realtime?channels=alerts,traffic,notifications,logs";
+      const socket = new WebSocket(wsUrl);
+      const alerts = [];
+      const timeline = [];
+      const notifications = [];
+      const logs = [];
+      let alertCount = 0;
+      let detectionCount = 0;
+      let notificationCount = 0;
+      let logCount = 0;
+
+      function renderState() {
+        document.getElementById("metric-alerts").textContent = alertCount;
+        document.getElementById("metric-detections").textContent = detectionCount;
+        document.getElementById("metric-notifications").textContent = notificationCount;
+        document.getElementById("metric-logs").textContent = logCount;
+        const alertList = document.getElementById("alert-list");
+        alertList.innerHTML = alerts.slice(0, 8).map(item => `
+          <li>
+            <strong>[${item.severity.toUpperCase()}]</strong> ${item.description} <br/>
+            <small>${item.timestamp} • ${item.threat_type} • ${item.src_ip}</small><br/>
+            <button class="soc-button" onclick="ackAlert(${item.id})">Acknowledge</button>
+          </li>
+        `).join("");
+        const timelineList = document.getElementById("timeline-list");
+        timelineList.innerHTML = timeline.slice(0, 8).map(item => `
+          <li><strong>${item.type}</strong> ${item.summary}<br/><small>${item.timestamp}</small></li>
+        `).join("");
+        const notificationList = document.getElementById("notification-list");
+        notificationList.innerHTML = notifications.slice(0, 6).map(item => `
+          <li><strong>${item.level}</strong> ${item.message}<br/><small>${item.timestamp}</small></li>
+        `).join("");
+        const logList = document.getElementById("log-list");
+        logList.innerHTML = logs.slice(0, 8).map(item => `
+          <li>${item.timestamp} • ${item.level.toUpperCase()} • ${item.message}</li>
+        `).join("");
+      }
+
+      function showDesktopNotification(payload) {
+        if (!window.Notification) return;
+        if (Notification.permission === "default") {
+          Notification.requestPermission();
+        }
+        if (Notification.permission === "granted") {
+          new Notification(payload.title || "SOC Notification", {
+            body: payload.message,
+            icon: "https://api.iconify.design/mdi/shield-alert.svg?color=%2338bdf8",
+          });
+        }
+        document.getElementById("alert-sound").play().catch(() => {});
+      }
+
+      async function ackAlert(alertId) {
+        if (!token) {
+          alert("Sign in to acknowledge alerts.");
+          return;
+        }
+        try {
+          await fetch(`${baseUrl}/api/v1/alerts/${alertId}/acknowledge`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              acknowledged_by: "analyst",
+              comment: "Acknowledged via SOC dashboard",
+            }),
+          });
+          const ackTimeline = {
+            type: "acknowledgement",
+            summary: `Alert ${alertId} acknowledged`,
+            timestamp: new Date().toISOString(),
+          };
+          timeline.unshift(ackTimeline);
+          renderState();
+        } catch (err) {
+          console.error(err);
+        }
+      }
+
+      socket.addEventListener("open", () => {
+        document.getElementById("ws-status").textContent = "Connected";
+      });
+      socket.addEventListener("close", () => {
+        document.getElementById("ws-status").textContent = "Disconnected";
+      });
+      socket.addEventListener("message", event => {
+        try {
+          const message = JSON.parse(event.data);
+          const payload = message.payload || {};
+          const timestamp = payload.timestamp || new Date().toISOString();
+          if (message.type === "alert") {
+            alertCount += 1;
+            timeline.unshift({ type: "alert", summary: payload.description, timestamp });
+            alerts.unshift(payload);
+            showDesktopNotification({ title: "New SOC Alert", message: payload.description });
+          }
+          if (message.type === "traffic") {
+            detectionCount += 1;
+            timeline.unshift({ type: "traffic", summary: payload.description, timestamp });
+          }
+          if (message.type === "notification") {
+            notificationCount += 1;
+            notifications.unshift(payload);
+            showDesktopNotification(payload);
+          }
+          if (message.type === "log") {
+            logCount += 1;
+            logs.unshift(payload);
+          }
+          if (message.type === "alert_ack") {
+            timeline.unshift({ type: "ack", summary: `Alert ${payload.id} acknowledged`, timestamp });
+          }
+          renderState();
+        } catch (err) {
+          console.error(err);
+        }
+      });
+
+      renderState();
+    </script>
+    """
+    html = html.replace("{{API_BASE_URL}}", api_base_url).replace("{{TOKEN}}", token)
+    components.html(html, height=980, scrolling=True)
+
+
+def render_soc_assistant() -> None:
+    st.subheader("SOC Analyst Assistant")
+    st.caption(
+        "Generate analyst-readable threat summaries, incident timelines, remediation guidance, and SHAP explanations via Groq AI."
+    )
+
+    client = get_client()
+    latest_result = st.session_state.get("latest_prediction_result")
+    manual_source = "{}"
+    if latest_result and latest_result.get("predictions"):
+        first_prediction = latest_result["predictions"][0]
+        manual_source = json.dumps(
+            {
+                "alert_id": None,
+                "packet_metadata": {"source": "live_prediction"},
+                "detection_result": first_prediction,
+                "threat_intelligence": [],
+                "shap_explanations": first_prediction.get("shap_values", {}),
+                "historical_events": [],
+                "system_metrics": {},
+                "analyst_notes": "Use the latest prediction context to generate a concise incident briefing.",
+            },
+            indent=2,
+        )
+
+    input_json = st.text_area(
+        "SOC context payload (JSON)",
+        value=manual_source,
+        height=280,
+        help="Provide structured packet, detection, threat intelligence, SHAP and system context for the analyst assistant.",
+    )
+
+    if st.button("Run SOC Analysis", use_container_width=True):
+        try:
+            payload = json.loads(input_json)
+        except json.JSONDecodeError as exc:
+            st.error(f"Invalid JSON payload: {exc}")
+            return
+
+        result, err = run_api_call(client.analyze_soc, payload)
+        if err:
+            render_api_error(err)
+            return
+
+        st.markdown("### Threat Summary")
+        st.write(result.get("threat_summary", "No summary returned."))
+
+        st.markdown("### Risk Assessment")
+        st.write(result.get("risk_assessment", "No risk assessment returned."))
+
+        st.markdown("### Remediation Recommendations")
+        for suggestion in result.get("remediation_recommendations", []):
+            st.write(f"- {suggestion}")
+
+        st.markdown("### Incident Timeline")
+        for event in result.get("incident_timeline", []):
+            st.write(f"- {event.get('timestamp', 'unknown')}: {event.get('event', event)}")
+            if event.get("detail"):
+                st.caption(event["detail"])
+
+        st.markdown("### False Positive Analysis")
+        st.write(result.get("false_positive_analysis", "Not available."))
+
+        st.markdown("### Correlated Events")
+        for event in result.get("correlated_events", []):
+            st.write(
+                f"- {event.get('event_id', 'unnamed')}: {event.get('correlation_reason', event)}"
+            )
+
+        st.markdown("### SHAP Explanation")
+        st.write(result.get("shap_explanation", "Not available."))
+
+        st.markdown("### Incident Report")
+        st.write(result.get("incident_report", "No incident report returned."))
+
+        if result.get("raw_response"):
+            with st.expander("Raw AI response"):
+                st.json(result.get("raw_response"))
+
+
 def render_about() -> None:
     st.subheader("About")
     st.write("""
@@ -926,6 +1205,8 @@ def main() -> None:
             "Statistics",
             "Analytics",
             "Explanations",
+            "SOC Dashboard",
+            "SOC Assistant",
             "About",
         ]
     )
@@ -942,6 +1223,10 @@ def main() -> None:
     with tabs[5]:
         render_explanations()
     with tabs[6]:
+        render_soc_dashboard()
+    with tabs[7]:
+        render_soc_assistant()
+    with tabs[8]:
         render_about()
 
 

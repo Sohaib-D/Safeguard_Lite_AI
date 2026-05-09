@@ -8,6 +8,7 @@ import pytest
 from sklearn.datasets import make_classification
 
 import ml.training as training_module
+from ml.optimization import JAX_AVAILABLE
 from ml.training import TrainingConfig, pick_best_model, train_and_select_best_model
 
 
@@ -129,7 +130,11 @@ def test_training_optimization_metadata_is_saved(tmp_path, monkeypatch):
     assert "optimization" in result
     assert "optimization" in bundle
     assert bundle["optimization"]["quantization"]["enabled"] is True
-    assert bundle["optimization"]["jax"]["enabled"] is True
+    if JAX_AVAILABLE:
+        assert bundle["optimization"]["jax"]["enabled"] is True
+    else:
+        assert bundle["optimization"]["jax"]["enabled"] is False
+        assert "reason" in bundle["optimization"]["jax"]
     assert bundle["selected_feature_indices"] is not None
     if bundle["optimization"]["feature_pruning"]["applied"]:
         assert len(bundle["feature_names"]) <= 5
