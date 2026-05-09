@@ -1,0 +1,30 @@
+{
+  "cached_at": "2026-05-09T19:45:00.620347",
+  "analysis": {
+    "vulnerabilities_found": true,
+    "summary": "Multiple vulnerabilities detected on hawkshippings.com. These include FTP sending credentials in plain text, HTTP being unencrypted, and potential security misconfigurations.",
+    "findings": [
+      {
+        "port": "21",
+        "service": "FTP",
+        "vulnerability": "FTP sends credentials in plain text. Vulnerable to sniffing.",
+        "exploitation": "An attacker can intercept and read sensitive information, such as usernames and passwords, sent over the network.",
+        "remediation": "Implement secure authentication methods, such as SSL/TLS encryption, to protect credentials."
+      },
+      {
+        "port": "80",
+        "service": "HTTP",
+        "vulnerability": "HTTP is unencrypted. Susceptible to Man-in-the-Middle (MitM) attacks.",
+        "exploitation": "An attacker can intercept and modify sensitive information, such as login credentials or financial data, sent over the network.",
+        "remediation": "Implement HTTPS encryption to protect data in transit."
+      },
+      {
+        "port": "N/A",
+        "service": "Cleartext Authentication",
+        "vulnerability": "Cleartext Authentication is exposed. Passwords are sent in cleartext and can be easily intercepted (sniffed) on the network.",
+        "exploitation": "An attacker can intercept and read sensitive information, such as usernames and passwords, sent over the network.",
+        "remediation": "Implement secure authentication methods, such as SSL/TLS encryption, to protect credentials."
+      }
+    ]
+  }
+}

@@ -73,6 +73,13 @@ class ActiveScanner:
             if not self._is_ip(target):
                 results["whois"] = await self._get_whois(target)
 
+            # 6. Advanced Vulnerability Configuration Checks
+            results["security_configs"] = self._evaluate_security(
+                results["ports"], 
+                results["http_headers"], 
+                results["dns"]
+            )
+
         except Exception as e:
             results["error"] = str(e)
 
@@ -220,3 +227,75 @@ class ActiveScanner:
                 return None
                 
         return await loop.run_in_executor(None, query_whois)
+
+    def _evaluate_security(self, ports: List[Dict[str, Any]], headers: Dict[str, str], dns_info: Dict[str, Any]) -> List[Dict[str, str]]:
+        vulns = []
+        
+        # 1. Bruteforce Vulnerability Checks
+        open_port_nums = [p["port"] for p in ports]
+        if 22 in open_port_nums:
+            vulns.append({
+                "type": "Brute-Force Risk",
+                "severity": "High",
+                "description": "SSH (Port 22) is publicly exposed. This service is highly targeted by automated brute-force scripts. Ensure key-based authentication is enforced and password login is disabled."
+            })
+        if 3389 in open_port_nums:
+            vulns.append({
+                "type": "Brute-Force & Ransomware Risk",
+                "severity": "Critical",
+                "description": "RDP (Port 3389) is exposed. This is the #1 vector for ransomware deployment. It should be placed behind a VPN."
+            })
+        if 21 in open_port_nums or 23 in open_port_nums:
+            vulns.append({
+                "type": "Cleartext Authentication",
+                "severity": "Critical",
+                "description": "FTP (21) or Telnet (23) is exposed. Passwords are sent in cleartext and can be easily intercepted (sniffed) on the network."
+            })
+
+        # 2. DDoS Vulnerability Check
+        if headers:
+            headers_lower = {k.lower(): v.lower() for k, v in headers.items()}
+            is_protected = False
+            waf_signatures = ['cloudflare', 'cloudfront', 'akamai', 'sucuri', 'incapsula', 'fastly']
+            
+            # Check Server header or custom headers
+            server_header = headers_lower.get('server', '')
+            if any(waf in server_header for waf in waf_signatures):
+                is_protected = True
+            if 'x-sucuri-id' in headers_lower or 'x-amz-cf-id' in headers_lower or 'cf-ray' in headers_lower:
+                is_protected = True
+                
+            if not is_protected:
+                vulns.append({
+                    "type": "DDoS Vulnerability",
+                    "severity": "High",
+                    "description": "No Web Application Firewall (WAF) or CDN detected. The origin IP is directly exposed, making the server highly susceptible to volumetric Layer 3/4 and Layer 7 DDoS attacks."
+                })
+
+        # 3. Web Security Headers (XSS, Clickjacking, MitM)
+        if headers:
+            headers_lower = {k.lower(): v.lower() for k, v in headers.items()}
+            
+            if 'strict-transport-security' not in headers_lower and 443 in open_port_nums:
+                vulns.append({
+                    "type": "Missing HSTS",
+                    "severity": "Medium",
+                    "description": "Strict-Transport-Security header is missing. The site is vulnerable to Man-in-the-Middle (MitM) attacks stripping SSL (SSL Stripping)."
+                })
+            
+            if 'content-security-policy' not in headers_lower:
+                vulns.append({
+                    "type": "Missing CSP",
+                    "severity": "Medium",
+                    "description": "Content-Security-Policy header is missing. This significantly increases the risk of Cross-Site Scripting (XSS) attacks succeeding."
+                })
+                
+            if 'x-frame-options' not in headers_lower:
+                vulns.append({
+                    "type": "Clickjacking Risk",
+                    "severity": "Low",
+                    "description": "X-Frame-Options header is missing. The site can be embedded in an iframe on a malicious website, enabling Clickjacking attacks."
+                })
+
+        # Return a clean list of findings. If empty, the target has a good basic posture.
+        return vulns

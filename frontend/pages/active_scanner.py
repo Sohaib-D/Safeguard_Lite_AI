@@ -104,6 +104,24 @@ def render_active_scanner():
             st.subheader("🏢 Domain Registration (WHOIS)")
             st.json(result["whois"])
 
+        # 6. Advanced Vulnerability Configurations (DDoS, Bruteforce, XSS)
+        st.subheader("🛡️ Vulnerability Configuration Checks")
+        st.markdown("We analyzed the infrastructure for misconfigurations that could lead to DDoS, Brute-Force, or Web attacks:")
+        
+        configs = result.get("security_configs", [])
+        if not configs:
+            st.success("✅ No critical configuration vulnerabilities detected. The server appears to be protected against basic volumetric DDoS and missing headers.")
+        else:
+            for c in configs:
+                sev = c.get('severity', 'Medium')
+                color = "red" if sev == "Critical" else "orange" if sev == "High" else "yellow"
+                st.markdown(f"""
+                <div style="padding: 1rem; border-left: 5px solid {color}; background: rgba(255,255,255,0.05); margin-bottom: 1rem; border-radius: 8px;">
+                    <h4 style="margin-top: 0; margin-bottom: 0.5rem; color: {color};">⚠️ {c.get('type')} ({sev})</h4>
+                    <p style="margin: 0; font-size: 0.95rem;">{c.get('description')}</p>
+                </div>
+                """, unsafe_allow_html=True)
+
         st.markdown("---")
         st.subheader("🧠 Advanced AI Vulnerability Analysis")
         st.markdown("Want to know if those specific software versions or headers are actually vulnerable? Let our AI Penetration Tester analyze the results.")

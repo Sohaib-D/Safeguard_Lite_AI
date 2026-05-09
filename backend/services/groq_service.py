@@ -152,7 +152,7 @@ If any field is missing from the input, infer the most likely answer using avail
 
         prompt = self._build_vulnerability_prompt(scan_results)
         response_data = await self._invoke_groq(prompt)
-        analysis = self._parse_response(response_data)
+        analysis = self._parse_vulnerability_response(response_data)
         self._save_cache(cache_key, analysis)
         return analysis
 
@@ -161,7 +161,7 @@ If any field is missing from the input, infer the most likely answer using avail
         return f"""
 You are a Senior Penetration Tester and Vulnerability Analyst.
 I have just performed a reconnaissance scan on a target network/domain.
-Analyze the provided scan data (open ports, service banners, HTTP headers, SSL info) and identify any REAL vulnerabilities.
+Analyze the provided scan data (open ports, service banners, HTTP headers, SSL info, and especially the 'security_configs' array) and identify all REAL vulnerabilities.
 
 Input Data:
 {scan_data}
@@ -172,8 +172,8 @@ Output format:
   "summary": "...",
   "findings": [
     {{
-      "port": 80,
-      "service": "nginx 1.14.0",
+      "port": "Port number or 'N/A'",
+      "service": "Service name",
       "vulnerability": "...",
       "exploitation": "...",
       "remediation": "..."
@@ -182,11 +182,12 @@ Output format:
 }}
 
 Instructions:
-- If the target is heavily secured (e.g., standard Cloudflare/AWS headers, no exposed version numbers, only standard ports), set "vulnerabilities_found" to false and explain that the infrastructure appears properly secured.
-- If you see outdated versions in banners or headers (e.g., PHP 5.x, old OpenSSH, Apache 2.2), identify the specific CVEs or general vulnerabilities associated with them.
-- If you see missing security headers (e.g., no Strict-Transport-Security or X-Frame-Options on port 443), report them.
+- CRITICAL: DO NOT invent or hallucinate vulnerabilities. ONLY report vulnerabilities that are explicitly supported by the input data.
+- If the `security_configs` array contains specific vulnerabilities (like DDoS, Brute-Force, or Missing Headers), YOU MUST INCLUDE THEM in your findings. Use port "N/A" if the vulnerability applies to the whole server.
+- DO NOT report DDoS, Brute-Force, or Security Header vulnerabilities IF they are NOT present in the `security_configs` array.
+- If you see outdated versions in banners or headers (e.g., PHP 5.x, old OpenSSH), identify the specific CVEs or general vulnerabilities associated with them. Do NOT assume a version if it says "None exposed".
 - Explain "exploitation" as exactly how a hacker would abuse the flaw.
-- Keep the language professional but easy to understand.
+- Keep the language professional but easy to understand for clients.
 - Return ONLY valid JSON in the exact output format specified.
 """
 
@@ -227,6 +228,28 @@ Instructions:
                     "Groq API request failed after retries"
                 ) from exc
         raise RuntimeError("Groq API request failed") from last_error
+
+    def _parse_vulnerability_response(self, response_payload: dict[str, Any]) -> dict[str, Any]:
+        choices = response_payload.get("choices", [])
+        if choices and "message" in choices[0]:
+            raw_output = choices[0]["message"].get("content", "")
+        else:
+            raw_output = response_payload.get("output") or response_payload.get("result") or response_payload
+            
+        if isinstance(raw_output, dict):
+            return raw_output
+            
+        if isinstance(raw_output, str):
+            text = raw_output.strip()
+            structured = self._extract_json_from_text(text)
+            if structured is not None:
+                return structured
+                
+        return {
+            "vulnerabilities_found": False,
+            "summary": "Failed to parse vulnerability report. Raw output: " + str(raw_output)[:500],
+            "findings": []
+        }
 
     def _parse_response(self, response_payload: dict[str, Any]) -> dict[str, Any]:
         choices = response_payload.get("choices", [])
