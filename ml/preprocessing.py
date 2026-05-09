@@ -118,7 +118,7 @@ def clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
 
     for col in cleaned.select_dtypes(include=["object", "string"]).columns:
         cleaned[col] = cleaned[col].astype(str).str.strip()
-        cleaned[col] = cleaned[col].replace({"": pd.NA, "nan": pd.NA, "None": pd.NA})
+        cleaned[col] = cleaned[col].replace({"": np.nan, "nan": np.nan, "None": np.nan})
 
     cleaned = cleaned.replace([np.inf, -np.inf], np.nan)
     return cleaned

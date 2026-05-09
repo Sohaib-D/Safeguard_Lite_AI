@@ -2,12 +2,19 @@ from __future__ import annotations
 
 import io
 import os
+import sys
 import time
 from datetime import datetime
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
+
+# Add project root to path so imports work when running with streamlit
+project_root = Path(__file__).parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 from frontend.api_client import APIClientError, SafeguardAPIClient
 from frontend.logging_config import configure_logger
