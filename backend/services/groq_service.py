@@ -143,6 +143,53 @@ Instructions:
 If any field is missing from the input, infer the most likely answer using available context.
 """
 
+    async def analyze_vulnerability(self, scan_results: dict[str, Any]) -> dict[str, Any]:
+        """Perform an advanced vulnerability analysis on the raw scan results."""
+        cache_key = self._build_cache_key({"type": "vuln_scan", "data": scan_results})
+        cached = self._load_cache(cache_key)
+        if cached is not None:
+            return cached
+
+        prompt = self._build_vulnerability_prompt(scan_results)
+        response_data = await self._invoke_groq(prompt)
+        analysis = self._parse_response(response_data)
+        self._save_cache(cache_key, analysis)
+        return analysis
+
+    def _build_vulnerability_prompt(self, scan_results: dict[str, Any]) -> str:
+        scan_data = json.dumps(scan_results, indent=2)
+        return f"""
+You are a Senior Penetration Tester and Vulnerability Analyst.
+I have just performed a reconnaissance scan on a target network/domain.
+Analyze the provided scan data (open ports, service banners, HTTP headers, SSL info) and identify any REAL vulnerabilities.
+
+Input Data:
+{scan_data}
+
+Output format:
+{{
+  "vulnerabilities_found": true/false,
+  "summary": "...",
+  "findings": [
+    {{
+      "port": 80,
+      "service": "nginx 1.14.0",
+      "vulnerability": "...",
+      "exploitation": "...",
+      "remediation": "..."
+    }}
+  ]
+}}
+
+Instructions:
+- If the target is heavily secured (e.g., standard Cloudflare/AWS headers, no exposed version numbers, only standard ports), set "vulnerabilities_found" to false and explain that the infrastructure appears properly secured.
+- If you see outdated versions in banners or headers (e.g., PHP 5.x, old OpenSSH, Apache 2.2), identify the specific CVEs or general vulnerabilities associated with them.
+- If you see missing security headers (e.g., no Strict-Transport-Security or X-Frame-Options on port 443), report them.
+- Explain "exploitation" as exactly how a hacker would abuse the flaw.
+- Keep the language professional but easy to understand.
+- Return ONLY valid JSON in the exact output format specified.
+"""
+
     async def _invoke_groq(self, prompt: str) -> dict[str, Any]:
         if not self.api_key:
             raise ValueError("Groq API key is not configured.")

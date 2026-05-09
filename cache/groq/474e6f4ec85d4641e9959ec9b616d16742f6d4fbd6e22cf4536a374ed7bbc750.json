@@ -1,0 +1,34 @@
+{
+  "cached_at": "2026-05-09T18:37:58.724144",
+  "analysis": {
+    "threat_summary": "No summary generated.",
+    "risk_assessment": "Unable to assess risk.",
+    "remediation_recommendations": [],
+    "incident_timeline": [],
+    "false_positive_analysis": "Unable to determine false positive likelihood.",
+    "correlated_events": [],
+    "shap_explanation": "No SHAP explanation available.",
+    "incident_report": "No incident report generated.",
+    "raw_response": {
+      "vulnerabilities_found": true,
+      "summary": "The target network appears to have some vulnerabilities, including an outdated SSH version and missing security headers.",
+      "findings": [
+        {
+          "port": 22,
+          "service": "SSH",
+          "vulnerability": "OpenSSH 6.6.1p1 is vulnerable to several attacks, including brute-force password guessing and exploitation of the 'CVE-2016-3115' vulnerability.",
+          "exploitation": "An attacker could attempt to brute-force the SSH password or exploit the 'CVE-2016-3115' vulnerability to gain unauthorized access to the system.",
+          "remediation": "Update OpenSSH to a version that is not vulnerable to these attacks, such as OpenSSH 7.0 or later."
+        },
+        {
+          "port": 80,
+          "service": "HTTP",
+          "vulnerability": "The HTTP server is unencrypted, making it susceptible to Man-in-the-Middle (MitM) attacks.",
+          "exploitation": "An attacker could intercept and modify the HTTP traffic between the client and server, potentially stealing sensitive information or injecting malicious content.",
+          "remediation": "Implement HTTPS (SSL/TLS) on port 443 to encrypt the traffic and prevent MitM attacks."
+        }
+      ]
+    },
+    "generated_at": "2026-05-09T18:37:58.724144"
+  }
+}

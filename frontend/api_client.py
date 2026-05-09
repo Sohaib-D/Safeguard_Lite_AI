@@ -146,3 +146,12 @@ class SafeguardAPIClient:
             timeout=120,
         )
         return self._handle_response(response)
+
+    def analyze_vulnerability(self, payload: dict[str, Any]) -> dict[str, Any]:
+        response = requests.post(
+            f"{self.base_url}/api/v1/scan/analyze",
+            headers={**self._headers(), "Content-Type": "application/json"},
+            json=payload,
+            timeout=120,
+        )
+        return self._handle_response(response)

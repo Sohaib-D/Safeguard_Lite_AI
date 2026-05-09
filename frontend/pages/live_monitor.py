@@ -1,16 +1,11 @@
 import streamlit as st
 import pandas as pd
 import time
-from frontend.app import get_client, run_api_call, render_api_error
-from frontend.pages.capture_control import start_capture, stop_capture, get_capture_stats
-
-st.set_page_config(
-    page_title="Live Network Monitor",
-    page_icon="📡",
-    layout="wide",
-)
+from frontend.app import get_client, run_api_call, render_api_error, apply_custom_css
+from frontend.pages.Capture_Control import start_capture, stop_capture, get_capture_stats
 
 def render_live_monitor():
+    apply_custom_css()
     st.title("📡 Live Network Monitor")
     st.markdown("""
     This page shows you what is happening on your network **right now**. 
@@ -57,8 +52,19 @@ def render_live_monitor():
                         st.rerun()
 
     with col2:
-        st.metric("Total Connections Monitored", stats.get('flows_count', 0) if isinstance(stats, dict) else 0)
-        st.metric("Devices Tracked", stats.get('ip_count', 0) if isinstance(stats, dict) else 0)
+        flows_count = stats.get('flows_count', 0) if isinstance(stats, dict) else 0
+        ip_count = stats.get('ip_count', 0) if isinstance(stats, dict) else 0
+        
+        st.markdown(f"""
+        <div class="metric-card" style="margin-bottom: 1rem;">
+            <div class="section-label">Total Connections Monitored</div>
+            <h2 style="margin:0; color:#fff;">{flows_count}</h2>
+        </div>
+        <div class="metric-card">
+            <div class="section-label">Devices Tracked</div>
+            <h2 style="margin:0; color:#fff;">{ip_count}</h2>
+        </div>
+        """, unsafe_allow_html=True)
 
     st.markdown("---")
     st.subheader("🚨 Real-Time Threat Alerts")

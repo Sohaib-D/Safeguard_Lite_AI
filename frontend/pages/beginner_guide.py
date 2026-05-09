@@ -1,12 +1,11 @@
 import streamlit as st
 
-st.set_page_config(
-    page_title="Cybersecurity 101",
-    page_icon="🎓",
-    layout="wide",
-)
+
+
+from frontend.app import apply_custom_css
 
 def render_beginner_guide():
+    apply_custom_css()
     st.title("🎓 Cybersecurity 101: The Beginner's Guide")
     st.markdown("""
     Welcome to your personal cybersecurity classroom! 

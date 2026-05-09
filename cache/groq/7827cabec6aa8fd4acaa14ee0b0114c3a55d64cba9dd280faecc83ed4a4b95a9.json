@@ -1,0 +1,48 @@
+{
+  "cached_at": "2026-05-09T18:19:43.984889",
+  "analysis": {
+    "threat_summary": "No summary generated.",
+    "risk_assessment": "Unable to assess risk.",
+    "remediation_recommendations": [],
+    "incident_timeline": [],
+    "false_positive_analysis": "Unable to determine false positive likelihood.",
+    "correlated_events": [],
+    "shap_explanation": "No SHAP explanation available.",
+    "incident_report": "No incident report generated.",
+    "raw_response": {
+      "vulnerabilities_found": true,
+      "summary": "The target network appears to have several vulnerabilities, including exposed FTP credentials, unencrypted HTTP traffic, and outdated software versions.",
+      "findings": [
+        {
+          "port": 21,
+          "service": "Pure-FTPd [privsep] [TLS]",
+          "vulnerability": "FTP sends credentials in plain text. Vulnerable to sniffing.",
+          "exploitation": "An attacker can intercept and steal FTP credentials, potentially gaining unauthorized access to sensitive data.",
+          "remediation": "Implement a secure authentication mechanism, such as SSL/TLS encryption, and consider using a more secure FTP server software."
+        },
+        {
+          "port": 80,
+          "service": "nginx 1.14.0",
+          "vulnerability": "HTTP is unencrypted. Susceptible to Man-in-the-Middle (MitM) attacks.",
+          "exploitation": "An attacker can intercept and modify HTTP traffic, potentially injecting malicious scripts or stealing sensitive data.",
+          "remediation": "Implement HTTPS encryption and ensure that all web traffic is redirected to the secure protocol."
+        },
+        {
+          "port": 110,
+          "service": "Dovecot DA",
+          "vulnerability": "Ensure this service is intentionally exposed and properly secured.",
+          "exploitation": "An attacker can exploit vulnerabilities in the POP3 service to gain unauthorized access to email accounts.",
+          "remediation": "Implement secure authentication mechanisms and consider using a more secure email server software."
+        },
+        {
+          "port": 143,
+          "service": "Dovecot DA",
+          "vulnerability": "Ensure this service is intentionally exposed and properly secured.",
+          "exploitation": "An attacker can exploit vulnerabilities in the IMAP service to gain unauthorized access to email accounts.",
+          "remediation": "Implement secure authentication mechanisms and consider using a more secure email server software."
+        }
+      ]
+    },
+    "generated_at": "2026-05-09T18:19:43.984889"
+  }
+}

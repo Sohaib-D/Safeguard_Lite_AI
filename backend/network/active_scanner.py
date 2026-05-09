@@ -128,7 +128,20 @@ class ActiveScanner:
         async def check_port(port: int):
             try:
                 conn = asyncio.open_connection(ip, port)
-                _, writer = await asyncio.wait_for(conn, timeout=1.0)
+                reader, writer = await asyncio.wait_for(conn, timeout=1.0)
+                
+                banner = None
+                if port not in (80, 443, 8000, 8080):  # HTTP doesn't send banner first
+                    try:
+                        data = await asyncio.wait_for(reader.read(1024), timeout=1.5)
+                        if data:
+                            banner = data.decode('utf-8', errors='ignore').strip()
+                            # Truncate long banners
+                            if len(banner) > 200:
+                                banner = banner[:197] + "..."
+                    except Exception:
+                        pass
+
                 writer.close()
                 await writer.wait_closed()
                 
@@ -137,6 +150,7 @@ class ActiveScanner:
                     "port": port,
                     "service": service_name,
                     "description": description,
+                    "banner": banner,
                     "vulnerability_context": self._get_port_context(port)
                 })
             except (asyncio.TimeoutError, ConnectionRefusedError, OSError):

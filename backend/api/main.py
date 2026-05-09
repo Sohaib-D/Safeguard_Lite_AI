@@ -734,6 +734,26 @@ async def run_active_scan(
         raise HTTPException(status_code=500, detail=f"Failed to run active scan: {e}")
 
 
+@app.post("/api/v1/scan/analyze")
+async def analyze_scan_results(
+    payload: dict,
+    current_user: dict = Depends(get_current_user),
+):
+    try:
+        logger.info(
+            "Scan analysis requested.",
+            extra={
+                "event_type": "scan_analyze",
+                "username": current_user.get("username"),
+            },
+        )
+        result = await groq_assistant.analyze_vulnerability(payload)
+        return result
+    except Exception as e:
+        logger.error(f"Failed to analyze scan: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to analyze scan: {e}")
+
+
 @app.websocket("/ws/realtime")
 async def realtime_websocket(websocket: WebSocket, channels: str = ""):
     requested_channels = [item.strip() for item in channels.split(",") if item.strip()]

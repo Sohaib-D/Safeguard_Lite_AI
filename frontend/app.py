@@ -1,4 +1,5 @@
 from __future__ import annotations
+# Force reload
 
 import io
 import json
@@ -18,9 +19,14 @@ project_root = Path(__file__).parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from frontend.api_client import APIClientError, SafeguardAPIClient
 from frontend.logging_config import configure_logger
 from frontend.sample_data import ATTACK_PROFILES, generate_live_records
+
+# Force reload of api_client to prevent Streamlit caching issues
+import sys
+if "frontend.api_client" in sys.modules:
+    del sys.modules["frontend.api_client"]
+from frontend.api_client import APIClientError, SafeguardAPIClient
 
 st.set_page_config(
     page_title="Safeguard-AI Lite",
@@ -48,37 +54,145 @@ def init_state() -> None:
 
 
 def apply_custom_css() -> None:
-    st.markdown(
+    st.html(
         """
         <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+
+        html, body, [class*="css"] {
+            font-family: 'Outfit', sans-serif !important;
+        }
+
+        .stApp {
+            background: linear-gradient(135deg, #020617 0%, #0f172a 100%);
+            background-attachment: fixed;
+        }
+
+        header[data-testid="stHeader"] {
+            background-color: transparent !important;
+        }
+
+        .stButton > button {
+            background: linear-gradient(90deg, #3b82f6 0%, #8b5cf6 100%) !important;
+            color: white !important;
+            border: none !important;
+            border-radius: 12px !important;
+            padding: 0.6rem 1.2rem !important;
+            font-weight: 600 !important;
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4) !important;
+            transition: all 0.3s ease !important;
+        }
+        .stButton > button:hover {
+            transform: translateY(-2px) scale(1.02) !important;
+            box-shadow: 0 8px 25px rgba(139, 92, 246, 0.6) !important;
+            background: linear-gradient(90deg, #60a5fa 0%, #a78bfa 100%) !important;
+        }
+        
+        .stButton > button[kind="secondary"] {
+            background: rgba(30, 41, 59, 0.8) !important;
+            border: 1px solid rgba(148, 163, 184, 0.3) !important;
+            box-shadow: none !important;
+            color: #f8fafc !important;
+        }
+        .stButton > button[kind="secondary"]:hover {
+            border: 1px solid rgba(56, 189, 248, 0.8) !important;
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.3) !important;
+        }
+
         .hero-card {
-            background: linear-gradient(
-                135deg,
-                rgba(17,24,39,0.95),
-                rgba(30,41,59,0.95)
-            );
-            border: 1px solid rgba(148,163,184,0.18);
-            border-radius: 20px;
-            padding: 1.6rem 1.8rem;
-            box-shadow: 0 20px 45px rgba(2, 6, 23, 0.35);
-            margin-bottom: 1rem;
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 24px;
+            padding: 2rem 2.5rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            margin-bottom: 2rem;
+            position: relative;
+            overflow: hidden;
         }
+        
+        .hero-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(56,189,248,0.1) 0%, transparent 70%);
+            z-index: 0;
+            pointer-events: none;
+        }
+
         .metric-card {
-            background: rgba(15, 23, 42, 0.85);
-            border: 1px solid rgba(56, 189, 248, 0.18);
-            border-radius: 18px;
-            padding: 1rem 1.1rem;
+            background: rgba(30, 41, 59, 0.5);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(148, 163, 184, 0.15);
+            border-radius: 16px;
+            padding: 1.5rem;
+            transition: all 0.3s ease;
         }
+        .metric-card:hover {
+            border-color: rgba(56, 189, 248, 0.5);
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.15);
+            transform: translateY(-2px);
+        }
+
         .section-label {
-            letter-spacing: 0.08em;
+            letter-spacing: 0.15em;
             text-transform: uppercase;
             color: #38bdf8;
-            font-size: 0.8rem;
-            margin-bottom: 0.25rem;
+            font-size: 0.85rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .hero-card h2, .hero-card p {
+            position: relative;
+            z-index: 1;
+        }
+
+        .stTextInput > div > div > input, .stTextArea > div > div > textarea {
+            background: rgba(15, 23, 42, 0.6) !important;
+            border: 1px solid rgba(148, 163, 184, 0.3) !important;
+            color: white !important;
+            border-radius: 12px !important;
+            padding: 0.75rem !important;
+            transition: all 0.3s ease !important;
+        }
+        .stTextInput > div > div > input:focus, .stTextArea > div > div > textarea:focus {
+            border-color: #8b5cf6 !important;
+            box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.3) !important;
+        }
+
+        .streamlit-expanderHeader {
+            background: rgba(30, 41, 59, 0.5) !important;
+            border-radius: 12px !important;
+            font-weight: 600 !important;
+            border: 1px solid rgba(148, 163, 184, 0.1) !important;
+        }
+        .streamlit-expanderContent {
+            background: rgba(15, 23, 42, 0.4) !important;
+            border: 1px solid rgba(148, 163, 184, 0.1) !important;
+            border-top: none !important;
+            border-bottom-left-radius: 12px !important;
+            border-bottom-right-radius: 12px !important;
+        }
+
+        .stAlert > div {
+            border-radius: 16px !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            backdrop-filter: blur(8px) !important;
+        }
+        
+        [data-testid="stSidebar"] {
+            background: rgba(15, 23, 42, 0.95) !important;
+            border-right: 1px solid rgba(255, 255, 255, 0.05) !important;
         }
         </style>
-        """,
-        unsafe_allow_html=True,
+        """
     )
 
 

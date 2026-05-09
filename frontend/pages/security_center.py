@@ -1,14 +1,11 @@
 import streamlit as st
 import pandas as pd
-from frontend.app import get_client, run_api_call, render_api_error
+from frontend.app import get_client, run_api_call, render_api_error, apply_custom_css
 
-st.set_page_config(
-    page_title="Security Center",
-    page_icon="🛡️",
-    layout="wide",
-)
+
 
 def render_security_center():
+    apply_custom_css()
     st.title("🛡️ Security Center & Automated Defense")
     st.markdown("""
     Welcome to the Security Center. When the AI detects a threat, you will see it here. 
