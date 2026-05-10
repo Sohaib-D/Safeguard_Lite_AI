@@ -164,6 +164,7 @@ def render_active_scanner():
                         st.write(f"**How to Fix it:** {f.get('remediation')}")
 
 if __name__ == "__main__":
+    apply_custom_css()
     # Ensure they are logged in if navigating directly
     if not st.session_state.get("auth_token"):
         st.warning("Please sign in from the main dashboard to use the Active Scanner.")

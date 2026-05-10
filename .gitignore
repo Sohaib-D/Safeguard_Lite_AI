@@ -1,19 +1,7 @@
-# Virtual Environments
-.venv/
-env/
-venv/
-ENV/
-
-# Environment Variables (CRITICAL: Do not remove)
-.env
-
-# Logs
-logs/
-*.log
-pip-log.txt
-
-# Python Cache & Build
+# Python
 __pycache__/
+*.pyc
+*.pyo
 *.py[cod]
 *$py.class
 *.so
@@ -33,30 +21,31 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-.pytest_cache/
-.mypy_cache/
-.hypothesis/
 
-# Databases (Local data only)
+# Environment
+.env
+.venv/
+env/
+venv/
+ENV/
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+logs/
+*.log
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Database
 *.db
-*.db-journal
+*.sqlite3
 safeguard_ai.db
 chatbot.db
 
-# Project Specific Data/Caches
-cache/
-data/
-models/cache/
-models/trained_*/
-!models/trained_*/best_model.pkl  # Keep the actual model file if desired
-
-# IDE Settings
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS Files
+# OS
 .DS_Store
 .DS_Store?
 ._*
@@ -64,3 +53,13 @@ models/trained_*/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Streamlit
+.streamlit/secrets.toml
+.streamlit/config.toml
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo

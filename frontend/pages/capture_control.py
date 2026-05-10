@@ -115,4 +115,5 @@ def main():
         })
 
 if __name__ == "__main__":
+    apply_custom_css()
     main()

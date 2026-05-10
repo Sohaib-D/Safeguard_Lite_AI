@@ -74,4 +74,5 @@ def render_beginner_guide():
     st.success("🎉 You are now equipped with the basics! Return to the Live Monitor or Active Scanner to see these concepts in action.")
 
 if __name__ == "__main__":
+    apply_custom_css()
     render_beginner_guide()

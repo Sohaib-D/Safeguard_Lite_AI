@@ -111,6 +111,7 @@ def render_live_monitor():
                     st.info("Click 'Analyze with AI' in the Security Center to get a plain-English explanation of this threat.")
 
 if __name__ == "__main__":
+    apply_custom_css()
     if not st.session_state.get("auth_token"):
         st.warning("Please sign in from the main dashboard to use the Live Monitor.")
     else:

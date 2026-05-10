@@ -37,6 +37,9 @@ from backend.schemas.response import (
 )
 from backend.schemas.groq import GroqAssistantRequest, GroqAssistantResponse
 from backend.services.alert_service import AlertService
+from sqlalchemy.orm import Session
+from backend.db.database import engine, Base, check_db_connection
+from backend.db.session import get_db
 from backend.services.auth_service import AuthService, AuthenticationError
 from backend.services.detection_engine import DetectionEngine
 from backend.services.groq_service import GroqAssistant
@@ -66,7 +69,7 @@ ws_manager = WebSocketManager()
 alert_service = AlertService(settings.database_path, websocket_manager=ws_manager)
 rule_parser = RuleParser(settings.rules_path)
 
-async def _publish_event(event_type: str, payload: dict[str, Any]) -> None:
+async def _publish_event(db: Session = Depends(get_db), event_type: str, payload: dict[str, Any]) -> None:
     try:
         await ws_manager.broadcast(event_type, payload)
     except Exception as exc:
@@ -75,7 +78,7 @@ async def _publish_event(event_type: str, payload: dict[str, Any]) -> None:
             extra={"event_type": "websocket_error", "details": str(exc)},
         )
 
-async def _publish_log_event(level: str, message: str, details: dict[str, Any] | None = None) -> None:
+async def _publish_log_event(db: Session = Depends(get_db), level: str, message: str, details: dict[str, Any] | None = None) -> None:
     await _publish_event(
         "log",
         {
@@ -104,7 +107,7 @@ groq_assistant = GroqAssistant(
 )
 
 # Add detection callback for additional logging
-async def detection_callback(detection):
+async def detection_callback(db: Session = Depends(get_db), detection):
     src_ip = detection.event_context.get("src_ip", "unknown") if detection.event_context else "unknown"
     payload = {
         "threat_type": detection.threat_type,
@@ -157,7 +160,7 @@ async def validation_exception_handler(
 
 
 @app.exception_handler(HTTPException)
-async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+async def http_exception_handler(db: Session = Depends(get_db), request: Request, exc: HTTPException) -> JSONResponse:
     logger.warning(
         "HTTP exception raised.",
         extra={
@@ -221,7 +224,7 @@ async def input_validation_exception_handler(
 
 
 @app.exception_handler(Exception)
-async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+async def unhandled_exception_handler(db: Session = Depends(get_db), request: Request, exc: Exception) -> JSONResponse:
     logger.exception(
         "Unhandled server exception.",
         extra={
@@ -244,7 +247,7 @@ def _json_records_to_frame(records: list[dict[str, Any]]) -> pd.DataFrame:
     return pd.DataFrame(records)
 
 
-async def _upload_to_frame(file: UploadFile) -> pd.DataFrame:
+async def _upload_to_frame(db: Session = Depends(get_db), file: UploadFile) -> pd.DataFrame:
     if not file.filename:
         raise HTTPException(
             status_code=400, detail="Uploaded file is missing a filename."
@@ -264,8 +267,33 @@ async def _upload_to_frame(file: UploadFile) -> pd.DataFrame:
         ) from exc
 
 
+
+@app.on_event("startup")
+async def startup_event(db: Session = Depends(get_db)):
+    logger.info("Initializing production database...")
+    if not check_db_connection():
+        logger.critical("Could not connect to PostgreSQL. App may be unstable.")
+    
+    # Create tables safely
+    try:
+        Base.metadata.create_all(bind=engine)
+        logger.info("Database tables verified/created.")
+    except Exception as e:
+        logger.error(f"Error creating tables: {e}")
+
+    # Seed admin if needed
+    from backend.db.database import SessionLocal
+    db = SessionLocal()
+    try:
+        auth = AuthService(db)
+        if not auth.admin_exists():
+            logger.info("Seeding initial admin user...")
+            auth.create_admin_user(settings.admin_username, settings.admin_password)
+    finally:
+        db.close()
+
 @app.get("/")
-async def root() -> dict[str, Any]:
+async def root(db: Session = Depends(get_db)) -> dict[str, Any]:
     return {
         "app": settings.app_name,
         "version": settings.app_version,
@@ -276,19 +304,19 @@ async def root() -> dict[str, Any]:
 
 
 @app.get("/health", response_model=HealthResponse)
-async def health() -> HealthResponse:
+async def health(db: Session = Depends(get_db)) -> HealthResponse:
     logger.info("Health endpoint checked.", extra={"event_type": "health_check"})
     return HealthResponse(
-        status="ok" if model_service.ping() and log_service.ping() else "degraded",
+        status="ok" if model_service.ping() and LogService(db).ping() else "degraded",
         app_name=settings.app_name,
         version=settings.app_version,
         model_loaded=model_service.ping(),
-        database_ok=log_service.ping(),
+        database_ok=LogService(db).ping(),
     )
 
 
 @app.post("/auth/create-admin", response_model=UserResponse)
-async def create_admin(
+async def create_admin(db: Session = Depends(get_db), 
     payload: CreateAdminRequest,
     current_user: dict | None = Depends(get_optional_current_user),
 ) -> UserResponse:
@@ -296,7 +324,7 @@ async def create_admin(
         "Create-admin endpoint called.",
         extra={"event_type": "create_admin_attempt", "username": payload.username},
     )
-    if auth_service.admin_exists():
+    if AuthService(db).admin_exists():
         if current_user is None:
             raise HTTPException(
                 status_code=401,
@@ -309,8 +337,8 @@ async def create_admin(
         raise HTTPException(
             status_code=400, detail="Username contains disallowed characters."
         )
-    user = auth_service.create_admin_user(username=username, password=payload.password)
-    log_service.log_user_activity(
+    user = AuthService(db).create_admin_user(username=username, password=payload.password)
+    LogService(db).log_user_activity(
         action="create_admin",
         username=user["username"],
         details={"created_admin": user["username"]},
@@ -319,7 +347,7 @@ async def create_admin(
 
 
 @app.post("/auth/login", response_model=TokenResponse)
-async def login(payload: LoginRequest) -> TokenResponse:
+async def login(db: Session = Depends(get_db), payload: LoginRequest) -> TokenResponse:
     logger.info(
         "Login endpoint called.",
         extra={"event_type": "login_attempt", "username": payload.username},
@@ -329,9 +357,9 @@ async def login(payload: LoginRequest) -> TokenResponse:
         raise HTTPException(
             status_code=400, detail="Username contains disallowed characters."
         )
-    user = auth_service.authenticate_user(username=username, password=payload.password)
-    token, expires_in = auth_service.create_access_token(user)
-    log_service.log_user_activity(
+    user = AuthService(db).authenticate_user(username=username, password=payload.password)
+    token, expires_in = AuthService(db).create_access_token(user)
+    LogService(db).log_user_activity(
         action="login",
         username=user["username"],
         details={"is_admin": user["is_admin"]},
@@ -345,7 +373,7 @@ async def login(payload: LoginRequest) -> TokenResponse:
 
 
 @app.get("/model_info", response_model=ModelInfoResponse)
-async def model_info(
+async def model_info(db: Session = Depends(get_db), 
     current_user: dict = Depends(get_current_user),
 ) -> ModelInfoResponse:
     logger.info(
@@ -356,16 +384,16 @@ async def model_info(
 
 
 @app.get("/stats", response_model=StatsResponse)
-async def stats(current_user: dict = Depends(get_current_user)) -> StatsResponse:
+async def stats(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)) -> StatsResponse:
     logger.info(
         "Stats retrieved.",
         extra={"event_type": "stats_view", "username": current_user.get("username")},
     )
-    return StatsResponse(**log_service.get_stats())
+    return StatsResponse(**LogService(db).get_stats())
 
 
 @app.post("/upload", response_model=UploadResponse)
-async def upload(
+async def upload(db: Session = Depends(get_db), 
     request: Request,
     file: UploadFile | None = File(default=None),
     current_user: dict = Depends(get_current_user),
@@ -403,7 +431,7 @@ async def upload(
             detail=f"Upload exceeds max row limit of {settings.max_upload_rows}.",
         )
 
-    upload_id = log_service.log_upload(
+    upload_id = LogService(db).log_upload(
         source_name=source_name,
         source_type=source_type,
         records=records,
@@ -427,7 +455,7 @@ async def upload(
 
 
 @app.post("/predict", response_model=PredictionResponse)
-async def predict(
+async def predict(db: Session = Depends(get_db), 
     request: Request,
     file: UploadFile | None = File(default=None),
     current_user: dict = Depends(get_current_user),
@@ -472,7 +500,7 @@ async def predict(
             status_code=400, detail=f"Prediction failed: {exc}"
         ) from exc
 
-    log_service.log_predictions(
+    LogService(db).log_predictions(
         result["predictions"],
         source_type=source_type,
         username=current_user.get("username"),
@@ -495,7 +523,7 @@ async def predict(
 # Packet Capture Endpoints
 
 @app.post("/api/v1/capture/start")
-async def start_capture(
+async def start_capture(db: Session = Depends(get_db), 
     interface: str = None,
     current_user: dict = Depends(get_current_user)
 ):
@@ -513,7 +541,7 @@ async def start_capture(
 
 
 @app.post("/api/v1/capture/stop")
-async def stop_capture(current_user: dict = Depends(get_current_user)):
+async def stop_capture(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     """Stop packet capture"""
     try:
         await packet_service.stop_monitoring()
@@ -528,7 +556,7 @@ async def stop_capture(current_user: dict = Depends(get_current_user)):
 
 
 @app.get("/api/v1/capture/stats")
-async def get_capture_stats(current_user: dict = Depends(get_current_user)):
+async def get_capture_stats(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     """Get packet capture statistics"""
     try:
         stats = await packet_service.get_stats()
@@ -539,9 +567,9 @@ async def get_capture_stats(current_user: dict = Depends(get_current_user)):
 
 
 @app.get("/api/v1/alerts")
-async def list_detection_alerts(current_user: dict = Depends(get_current_user)):
+async def list_detection_alerts(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     try:
-        alerts = await alert_service.list_alerts(limit=100)
+        alerts = await AlertService(db, ws_manager).list_alerts(limit=100)
         await _publish_log_event(
             "info",
             "Listed detection alerts.",
@@ -554,13 +582,13 @@ async def list_detection_alerts(current_user: dict = Depends(get_current_user)):
 
 
 @app.post("/api/v1/alerts/{alert_id}/acknowledge")
-async def acknowledge_detection_alert(
+async def acknowledge_detection_alert(db: Session = Depends(get_db), 
     alert_id: int,
     payload: AlertAcknowledgementRequest,
     current_user: dict = Depends(get_current_user),
 ):
     try:
-        acknowledgement = await alert_service.acknowledge_alert(alert_id, payload)
+        acknowledgement = await AlertService(db, ws_manager).acknowledge_alert(alert_id, payload)
         await _publish_log_event(
             "info",
             "Alert acknowledgement submitted.",
@@ -576,7 +604,7 @@ async def acknowledge_detection_alert(
 
 
 @app.get("/api/v1/rules")
-async def list_rules(current_user: dict = Depends(get_current_user)):
+async def list_rules(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     try:
         return {"rules": rule_parser.rules}
     except Exception as e:
@@ -585,7 +613,7 @@ async def list_rules(current_user: dict = Depends(get_current_user)):
 
 
 @app.post("/api/v1/rules/reload")
-async def reload_rules(current_user: dict = Depends(get_current_user)):
+async def reload_rules(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     try:
         rule_parser.load_rules()
         return {"status": "reloaded", "rule_count": len(rule_parser.rules)}
@@ -595,7 +623,7 @@ async def reload_rules(current_user: dict = Depends(get_current_user)):
 
 
 @app.post("/api/v1/soc/analyze", response_model=GroqAssistantResponse)
-async def analyze_soc_context(
+async def analyze_soc_context(db: Session = Depends(get_db), 
     payload: GroqAssistantRequest,
     current_user: dict = Depends(get_current_user),
 ):
@@ -616,12 +644,12 @@ async def analyze_soc_context(
 
 
 @app.post("/api/v1/response/request")
-async def request_response_action(
+async def request_response_action(db: Session = Depends(get_db), 
     payload: ResponseActionRequest,
     current_user: dict = Depends(get_current_user),
 ):
     try:
-        action_id = response_engine.propose_action(payload)
+        action_id = ResponseEngine(db).propose_action(payload)
         logger.info(
             "Response action requested.",
             extra={
@@ -638,11 +666,11 @@ async def request_response_action(
 
 
 @app.get("/api/v1/response/pending")
-async def get_pending_response_actions(
+async def get_pending_response_actions(db: Session = Depends(get_db), 
     current_user: dict = Depends(get_current_user),
 ):
     try:
-        actions = response_engine.get_pending_actions()
+        actions = ResponseEngine(db).get_pending_actions()
         return [action.model_dump(mode="json") for action in actions]
     except Exception as e:
         logger.error(f"Failed to retrieve pending actions: {e}")
@@ -650,14 +678,14 @@ async def get_pending_response_actions(
 
 
 @app.post("/api/v1/response/approve")
-async def approve_response_action(
+async def approve_response_action(db: Session = Depends(get_db), 
     payload: ResponseActionApproval,
     current_user: dict = Depends(get_current_user),
 ):
     if not current_user.get("is_admin"):
         raise HTTPException(status_code=403, detail="Admin privileges required to approve response actions.")
     try:
-        result = response_engine.approve_action(
+        result = ResponseEngine(db).approve_action(
             action_id=payload.action_id,
             approved_by=payload.approved_by,
             approved=payload.approved,
@@ -679,14 +707,14 @@ async def approve_response_action(
 
 
 @app.post("/api/v1/response/rollback")
-async def rollback_response_action(
+async def rollback_response_action(db: Session = Depends(get_db), 
     payload: RollbackRequest,
     current_user: dict = Depends(get_current_user),
 ):
     if not current_user.get("is_admin"):
         raise HTTPException(status_code=403, detail="Admin privileges required to rollback response actions.")
     try:
-        response = response_engine.rollback_action(
+        response = ResponseEngine(db).rollback_action(
             action_id=payload.action_id,
             requested_by=payload.requested_by,
             reason=payload.reason,
@@ -714,7 +742,7 @@ class ScanRequest(BaseModel):
     target: str
 
 @app.post("/api/v1/scan")
-async def run_active_scan(
+async def run_active_scan(db: Session = Depends(get_db), 
     payload: ScanRequest,
     current_user: dict = Depends(get_current_user),
 ):
@@ -735,7 +763,7 @@ async def run_active_scan(
 
 
 @app.post("/api/v1/scan/analyze")
-async def analyze_scan_results(
+async def analyze_scan_results(db: Session = Depends(get_db), 
     payload: dict,
     current_user: dict = Depends(get_current_user),
 ):
@@ -755,7 +783,7 @@ async def analyze_scan_results(
 
 
 @app.websocket("/ws/realtime")
-async def realtime_websocket(websocket: WebSocket, channels: str = ""):
+async def realtime_websocket(db: Session = Depends(get_db), websocket: WebSocket, channels: str = ""):
     requested_channels = [item.strip() for item in channels.split(",") if item.strip()]
     await ws_manager.connect(websocket, requested_channels)
     try:
@@ -771,7 +799,7 @@ async def realtime_websocket(websocket: WebSocket, channels: str = ""):
                         acknowledged_by=payload.get("acknowledged_by", "analyst"),
                         comment=payload.get("comment"),
                     )
-                    acknowledgement = await alert_service.acknowledge_alert(
+                    acknowledgement = await AlertService(db, ws_manager).acknowledge_alert(
                         int(payload["alert_id"]), ack_payload
                     )
                     await ws_manager.broadcast("alert_ack", acknowledgement.model_dump())
@@ -782,7 +810,7 @@ async def realtime_websocket(websocket: WebSocket, channels: str = ""):
 
 
 @app.websocket("/ws/alerts")
-async def alerts_websocket(websocket: WebSocket):
+async def alerts_websocket(db: Session = Depends(get_db), websocket: WebSocket):
     await ws_manager.connect(websocket, ["alerts"])
     try:
         while True:

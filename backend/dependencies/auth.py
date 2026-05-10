@@ -1,18 +1,16 @@
 from __future__ import annotations
-
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-
-from backend.services.auth_service import AuthenticationError
+from sqlalchemy.orm import Session
+from backend.db.session import get_db
+from backend.services.auth_service import AuthService, AuthenticationError
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
-
 def get_current_user(
+    db: Session = Depends(get_db),
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
 ):
-    from backend.api.main import auth_service as service
-
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -20,6 +18,7 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    service = AuthService(db)
     try:
         return service.decode_token(credentials.credentials)
     except AuthenticationError as exc:
@@ -29,7 +28,6 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         ) from exc
 
-
 def require_admin(user: dict = Depends(get_current_user)) -> dict:
     if not user.get("is_admin"):
         raise HTTPException(
@@ -37,12 +35,10 @@ def require_admin(user: dict = Depends(get_current_user)) -> dict:
         )
     return user
 
-
 def get_optional_current_user(
+    db: Session = Depends(get_db),
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
 ):
-    from backend.api.main import auth_service as service
-
     if credentials is None:
         return None
 
@@ -53,6 +49,7 @@ def get_optional_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    service = AuthService(db)
     try:
         return service.decode_token(credentials.credentials)
     except AuthenticationError as exc:

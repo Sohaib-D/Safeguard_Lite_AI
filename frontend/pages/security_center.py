@@ -95,6 +95,7 @@ def render_security_center():
             st.markdown("---")
 
 if __name__ == "__main__":
+    apply_custom_css()
     if not st.session_state.get("auth_token"):
         st.warning("Please sign in from the main dashboard to use the Security Center.")
     else:
