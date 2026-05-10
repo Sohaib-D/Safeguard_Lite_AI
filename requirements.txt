@@ -27,3 +27,4 @@ streamlit==1.39.0
 uvicorn==0.30.6
 psutil>=5.9.0
 dnspython>=2.6.0
+python-whois==0.9.4
